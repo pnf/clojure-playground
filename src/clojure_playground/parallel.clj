@@ -1,13 +1,11 @@
 (ns clojure-playground.parallel)
 
 (defn mergey [[h1 & t1 :as l1] [h2 & t2 :as l2]] 
-  (do 
     ;(println "Entering mergey with " l1 l2)  (Thread/sleep 100)
     (cond (nil? h1) l2
           (nil? h2) l1
           (> h1 h2) (cons h2 (mergey l1 (rest l2)))
           :else     (cons h1 (mergey l2 (rest l1))))
-    )
 )
 
 (defn msort [l] (if (< (count l) 2) l
@@ -57,14 +55,13 @@
 ; the same watch; hence the 'when' check.
 (defn avenir-map [func1 a]
   (let [a2 (agent nil)]
-    (send a (fn [v] (do 
-                      (if v (send a2 (fn [_] (func1 v)))
-                          (let [id (str (java.util.UUID/randomUUID))]
-                            (add-watch a id
-                                       (fn [k ref o n] (when n (let [res (func1 n)]
-                                                                 (send a2 (fn [_] res))))))
-                            ))
-                      v)))
+    (send a (fn [v] 
+              (if v (send a2 (fn [_] (func1 v)))
+                  (let [id (str (java.util.UUID/randomUUID))]
+                    (add-watch a id
+                               (fn [k ref o n] (when n (let [res (func1 n)]
+                                                         (send a2 (fn [_] res)))))) ))
+              v))
     a2))
 
 (defn avenir-map-multi [funcn & as]
@@ -84,13 +81,22 @@
    receive the result."
   [& body] `(avenir-call (^{:once true} fn* [] ~@body)))
 
-(defn par-assoc-reduce-avenir [in enrich merge impoverish timeout]
+; wait for the thing to be non-nil, with timeout
+(defn avenir-await [a timeout-ms]
+  (let [latch      (new java.util.concurrent.CountDownLatch 1)
+        id         (str (java.util.UUID/randomUUID))]
+    (add-watch a id (fn [k ref o n] (when n (.countDown latch)) n))
+    (.await latch timeout-ms java.util.concurrent.TimeUnit/MILLISECONDS)
+    (deref a)))
+
+(defn par-assoc-reduce-avenir [in enrich merge impoverish timeout-ms]
   (letfn [(assoc-reduce* [l]
             (if (< (count l) 2) (avenir (enrich l))
                 (let [[l1,l2] (split-at (int (/ (count l) 2)) l)
                       [f1,f2] (map assoc-reduce* [l1 l2])]
                   (avenir-map-multi merge f1 f2))))]
-    (impoverish (deref (assoc-reduce* in)))))
+    (impoverish (avenir-await (assoc-reduce* in) timeout-ms))))
+
 
 (defn amsort2 [l timeout] (par-assoc-reduce-avenir l identity mergey identity timeout))
 
