@@ -53,28 +53,31 @@
 ; The callback will evaluate func1 on the contents of a1 and send
 ; a2 a closure to set the results.  (Note that adding a watch can trigger
 ; the same watch; hence the 'when' check.
-(defn avenir-map [func1 a]
-  (let [a2 (agent nil)]
-    (send a (fn [v] 
-              (if v (send a2 (fn [_] (func1 v)))
-                  (let [id (str (java.util.UUID/randomUUID))]
-                    (add-watch a id
-                               (fn [k ref o n] (when n (let [res (func1 n)]
-                                                         (send a2 (fn [_] res)))))) ))
-              v))
-    a2))
+(defn avenir-map 
+  ([func1 a]
+     (let [am (agent nil)]
+       (send a (fn [v] 
+                 (if v (send am (fn [_] (func1 v)))
+                     (let [id (str (java.util.UUID/randomUUID))]
+                       (add-watch a id
+                                  (fn [k ref o n] (when n (let [res (func1 n)]
+                                                            (send am (fn [_] res)))))) ))
+                 v))
+       am))
+  ([funcn a1 a2 & as]
+     (let [as   (concat [a1 a2] as)
+           abuf (agent 0)
+           am   (agent nil)
+           id (str (java.util.UUID/randomUUID))]
+       ; when abuf reaches number of agents, apply funcn on the deref'd list
+       (add-watch abuf id 
+                  (fn [k ref o n] (when (= n (count as)) 
+                                    (let [res (apply funcn (map deref as))]
+                                                           (send am (fn [_] res))))))
+                                        ; add watch to each agent, incrementing count in abuf
+       (doseq [a as] (avenir-map (fn [v] (when v (send abuf inc))) a))
+       am)))
 
-(defn avenir-map-multi [funcn & as]
-  (let [abuf (agent 0)
-        a2   (agent nil)
-        id (str (java.util.UUID/randomUUID))]
-    ; when abuf reaches number of agents, apply funcn on the deref'd list
-    (add-watch abuf id (fn [k ref o n] (when (= n (count as)) (let [res (apply funcn (map deref as))]
-                                                                (send a2 (fn [_] res))))))
-    ; add watch to each agent, incrementing count in abuf
-    (doseq [a as] (avenir-map (fn [v] (when v (send abuf inc))) a))
-    a2)
-  )
 
 (defmacro avenir
   "Takes a body of expressions and yields an agent which will
