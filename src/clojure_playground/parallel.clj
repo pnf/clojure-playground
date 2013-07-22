@@ -84,7 +84,9 @@
    receive the result."
   [& body] `(avenir-call (^{:once true} fn* [] ~@body)))
 
-; wait for the thing to be non-nil, with timeout
+; wait for the thing to be non-nil, with timeout.  I can't figure out any way to do
+; this other than adding a watch to detect the completed calculation and then a latch to
+; implement the block.
 (defn avenir-await [a timeout-ms]
   (let [latch      (new java.util.concurrent.CountDownLatch 1)
         id         (str (java.util.UUID/randomUUID))]
@@ -92,15 +94,18 @@
     (.await latch timeout-ms java.util.concurrent.TimeUnit/MILLISECONDS)
     (deref a)))
 
-(defn par-assoc-reduce-avenir [in enrich merge impoverish timeout-ms]
+(defn par-assoc-reduce-avenir [in merge & {:keys [enrich impoverish minpar timeout-ms] :or
+                                           {enrich     identity
+                                            impoverish identity
+                                            minpar     1
+                                            timeout-ms 1000}}]
   (letfn [(assoc-reduce* [l]
             (if (< (count l) 2) (avenir (enrich l))
                 (let [[l1,l2] (split-at (int (/ (count l) 2)) l)
                       [f1,f2] (map assoc-reduce* [l1 l2])]
-                  (avenir-map-multi merge f1 f2))))]
+                  (avenir-map merge f1 f2))))]
     (impoverish (avenir-await (assoc-reduce* in) timeout-ms))))
 
 
-(defn amsort2 [l timeout] (par-assoc-reduce-avenir l identity mergey identity timeout))
-
+(defn amsort2 [l timeout] (par-assoc-reduce-avenir l mergey :timeout-ms timeout))
 
