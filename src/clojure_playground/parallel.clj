@@ -1,12 +1,30 @@
 (ns clojure-playground.parallel)
 
-(defn mergey [[h1 & t1 :as l1] [h2 & t2 :as l2]] 
+(defn merge-explode [[h1 & t1 :as l1] [h2 & t2 :as l2]] 
     ;(println "Entering mergey with " l1 l2)  (Thread/sleep 100)
     (cond (nil? h1) l2
           (nil? h2) l1
-          (> h1 h2) (cons h2 (mergey l1 (rest l2)))
-          :else     (cons h1 (mergey l2 (rest l1))))
-)
+          (> h1 h2) (cons h2 (merge-explode l1 t2))
+          :else     (cons h1 (merge-explode l2 t1))))
+
+(defn mergey-still-explodes [l1 l2]
+  (loop [[h1 & t1 :as l1] l1
+         [h2 & t2 :as l2] l2
+         acc              ()]
+    (cond (nil? h1) (concat acc l2)
+          (nil? h2) (concat acc l1)
+          :else (let [[h l t] (if (> h1 h2) [h2 l1 t2] [h1 l2 t1])]
+                  (recur l t (concat acc [h]))))))
+
+;; This version should conserve stack and cpu
+(defn mergey [l1 l2]
+  (loop [[h1 & t1 :as l1] l1
+         [h2 & t2 :as l2] l2
+         acc              ()]
+    (cond (nil? h1) (concat (reverse acc) l2)
+          (nil? h2) (concat (reverse acc) l1)
+          :else (let [[h l t] (if (> h1 h2) [h2 l1 t2] [h1 l2 t1])]
+                  (recur l t (cons h acc))))))
 
 (defn msort [l] (if (< (count l) 2) l
                     (let [[l1 l2] (split-at (-> l count (/ 2) int) l)]
@@ -22,24 +40,28 @@
               (mergey @f1 @f2))))))
   (deref  (fmsort* l) timeout nil))
 
-(defn assoc-reduce [in enrich merge impoverish]
+(defn assoc-reduce [in merge & {:keys [enrich impoverish]
+                                :or   {enrich identity impoverish identity}}]
   (letfn [(assoc-reduce* [l]
              (if (< (count l) 2) (enrich l)
                  (let [[l1,l2] (split-at (int (/ (count l) 2)) l)]
                    (merge (assoc-reduce* l1) (assoc-reduce* l2) ))))]
     (impoverish (assoc-reduce* in))))
 
-(defn par-assoc-reduce [in enrich merge impoverish timeout]
+(defn par-assoc-reduce [in merge & {:keys [enrich impoverish timeout-ms] 
+                                    :or   {enrich     identity
+                                           impoverish identity
+                                           timeout-ms 1000}}]
   (letfn [(assoc-reduce* [l]
              (if (< (count l) 2) (future (enrich l))
                  (let [[l1,l2] (split-at (int (/ (count l) 2)) l)]
                    (future
                      (let [[f1,f2] (map assoc-reduce* [l1 l2])]
                        (merge @f1 @f2))))))]
-    (impoverish (deref (assoc-reduce* in) timeout "timed-out"))))
+    (impoverish (deref (assoc-reduce* in) timeout-ms "timed-out"))))
 
-(defn msort2 [l] (assoc-reduce l identity mergey identity))
-(defn fmsort2 [l timeout] (par-assoc-reduce l identity mergey identity timeout))
+(defn msort2 [l] (assoc-reduce l mergey))
+(defn fmsort2 [l timeout] (par-assoc-reduce l mergey :timeout-ms 1000))
 
 ; Create an agent, and when func0 has executed send the agent a closure to set its return value.
 (defn avenir-call [func0]
@@ -99,12 +121,19 @@
                                             impoverish identity
                                             minpar     1
                                             timeout-ms 1000}}]
-  (letfn [(assoc-reduce* [l]
-            (if (< (count l) 2) (avenir (enrich l))
-                (let [[l1,l2] (split-at (int (/ (count l) 2)) l)
-                      [f1,f2] (map assoc-reduce* [l1 l2])]
-                  (avenir-map merge f1 f2))))]
-    (impoverish (avenir-await (assoc-reduce* in) timeout-ms))))
+  (letfn [(assoc-reduce-mt [l]
+            (let [n (count l)]
+             (condp > n
+               2        (avenir (enrich l))
+               minpar   (avenir (assoc-reduce-1t l))
+                 (let [[l1,l2] (split-at (int (/ n 2)) l)
+                       [f1,f2] (map assoc-reduce-mt [l1 l2]) ]
+                   (avenir-map merge f1 f2)))))
+          (assoc-reduce-1t [l]
+            (if (< (count l) 2) (enrich l)
+                (let [[l1,l2] (split-at (int (/ (count l) 2)) l)]
+                  (merge (assoc-reduce-1t l1) (assoc-reduce-1t l2)))))]
+    (impoverish (avenir-await (assoc-reduce-mt in) timeout-ms))))
 
 
 (defn amsort2 [l timeout] (par-assoc-reduce-avenir l mergey :timeout-ms timeout))
