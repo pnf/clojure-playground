@@ -2,14 +2,9 @@
   (:require [ clojure.core.async :as async :refer [<!! >!! timeout chan alt!!]] )
 )
 
-; don't use me
-(defn merge-explode [[h1 & t1 :as l1] [h2 & t2 :as l2]] 
-    (cond (nil? h1) l2
-          (nil? h2) l1
-          (> h1 h2) (cons h2 (merge-explode l1 t2))
-          :else     (cons h1 (merge-explode l2 t1))))
 
-;; This version should conserve stack and cpu
+
+;; Merge sort is the poster child for associative reduction
 (defn merge-lists [l1 l2]
   (loop [[h1 & t1 :as l1] l1
          [h2 & t2 :as l2] l2
@@ -19,11 +14,15 @@
           :else (let [[h l t] (if (> h1 h2) [h2 l1 t2] [h1 l2 t1])]
                   (recur l t (cons h acc))))))
 
-;; Familiar merge sort
+
 (defn msort [l] (if (< (count l) 2) l
                     (let [[l1 l2] (split-at (-> l count (/ 2) int) l)]
                       (merge-lists (msort l1) (msort l2)))))
-; (msort (repeatedly 10 rand)
+; (msort (repeatedly 10 rand))
+
+
+
+
 
 ;; Generalize associative reduce
 (defn assoc-reduce [in merge & {:keys [enrich impoverish]
@@ -33,7 +32,10 @@
                  (let [[l1,l2] (split-at (int (/ (count l) 2)) l)]
                    (merge (assoc-reduce* l1) (assoc-reduce* l2) ))))]
     (impoverish (assoc-reduce* in))))
+
 ; (assoc-reduce (repeatedly 10 rand) merge-lists)
+
+
 
 (defn merge-running-sums [rs1 rs2]
   (let [r0 (last rs1)]
@@ -144,11 +146,22 @@
     (deref a)))
 
 #_(
+        latch
+          |
+          f       wait on the latch, then emit random double
+        /   \
+      g1    g2    embed the double in a string
+        \   /
+          h       combine the strings
+          |
+
    (def latch (new java.util.concurrent.CountDownLatch 1))
    (def f (avenir (do (.await latch) (.nextDouble (java.util.Random.)))))
    (def g1 (avenir-map #(str "My favorite number is " % " ") f))
    (def g2 (avenir-map #(str "But mine is " (* % 2) " ") f))
    (def h (avenir-map #(println (str %1 %2)) g1 g2 ))
+
+   (.countDown latch)
  )
 
 (defn avenir-assoc-reduce [in merge & {:keys [enrich impoverish minpar timeout-ms] :or
