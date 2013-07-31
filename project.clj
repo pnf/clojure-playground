@@ -7,4 +7,5 @@
                  [org.clojure/data.xml "0.0.7"]
                  [org.clojure/data.zip "0.1.1"]
                  [local/core-async "0.1.0-SNAPSHOT"]
+                 [org.clojure/math.numeric-tower "0.0.2"]
                  ])
