@@ -2,23 +2,17 @@
   ( :require [clojure.math.numeric-tower :as nt]
              [clojure.string :as cs]))
 
-;; Fractran itself is easy.
-(defn fractran-loop[n prog]
-  "Given an input integer n, and a sequence of fractions prog, repeat the following:
-1. Find the first fraction f such that n*nf is an integer
-2. Set n <- n*nf and continue
-Stop if we can't find an integral n*nf"
-  (loop [n n]
-    (let [nf (some (fn [nf] (and (integer? nf) nf)) 
-                   (map (partial * n) prog))]
-      (if nf (recur nf) n))))
-
 ;; Now a version that gives us intermediate results
 (defn fractran-seq [n prog]
   (let [nf (some (fn [nf] (and (integer? nf) nf)) (map (partial * n) prog))]
     (if nf (cons nf (lazy-seq (fractran-seq nf prog))) (list))
 ))
-(defn fractran [n prog] (last (fractran-seq n prog)))
+(defn fractran [n prog] 
+  "Given an input integer n, and a sequence of fractions prog, repeat the following:
+1. Find the first fraction f such that n*nf is an integer
+2. Set n <- n*nf and continue
+Stop if we can't find an integral n*nf"
+  (last (fractran-seq n prog)))
 
 ;;;;;;;;;;;;;;;;;;;;;
 ;; Now some utilities.
