@@ -65,8 +65,6 @@
                        ps )
                 )))))
 
-(defn term-from-prime-factors [pf] (reduce (fn [n [p k]] (* n (nt/expt p k))) 1 pf))
-
 ;; bit arithmetic doesn't work for bigint
 (defn power-of-2 [n]
   (loop [n n i 0]

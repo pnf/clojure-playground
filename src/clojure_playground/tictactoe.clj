@@ -21,7 +21,7 @@
    max-key                                            ; X's score goal
    (fn [p1 m] (bit-or p1 m))                          ; how to apply a move to X's position
    (fn [p2 m] p2)])                                   ; how (not) to apply it to O's
-(def for2 ; i.e. when it's Y's turn
+(def for2 ; i.e. when it's O's turn
   [(fn [t] (+(*(first t) 4)(*(second t) 2)(t 2) ))
    min-key
    (fn [p1 m] p1)
