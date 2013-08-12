@@ -1,7 +1,7 @@
 (ns clojure.playground-zero
   (:require [zeromq.zmq :as zmq]
             [zeromq.sendable :as zs]
-            [clojure.core.async :refer [>! <! chan put! take! timeout close! dropping-buffer go]]))
+            [clojure.core.async :refer [>! <! >!! <!! chan put! take! timeout close! dropping-buffer go]]))
 
 ;;; nb...
 #_((def ^:const socket-types
@@ -35,15 +35,40 @@
                                (zs/send msg skt 0)
                                (recur))))))
       ; TODO: how/when to close socket
-      :pull (go (while true (let [msg (String. (zmq/receive-str skt))]
+      :pull (go (while true (let [msg (String. (zmq/receive-all skt))]
                               (println "Got" msg "from" skt)
                               (>! c msg)))))
     c))
 
 
+
+(defn zmq-chan2 [context socket-type addr channel-push-or-pull bind-or-connect]
+  (let [zfn    (case bind-or-connect :bind zmq/bind :connect zmq/connect)
+        skt    (-> (zmq/socket context channel-push-or-pull)
+                  (zfn addr))
+        c     (chan (dropping-buffer 137))]
+    (case channel-push-or-pull
+      :push (future (loop [] (let [^String msg (<!! c)]
+                           (if (nil? msg)
+                             (zmq/close skt)
+                             (do 
+                               (zs/send msg skt 0)
+                               (recur))))))
+      ; TODO: how/when to close socket
+      :pull (future (while true (let [msg (String. (zmq/receive-all skt))]
+                              (println "Got" msg "from" skt)
+                              (>!! c msg)))))
+    c))
+
+
+
 #_(
 
    (def context (zmq/zcontext))
+
+   (def pull (zmq-chan ctx :pull "tcp://*:12348" :pull :bind))
+
+   (def push (zmq-chan ctx :push "tcp://127.0.0.1:12348" :push :connect))
 
     (deftest push-pull-test
       (with-open [push (-> (zmq/socket context :push)
