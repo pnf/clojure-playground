@@ -4,7 +4,7 @@
            [java.nio.file FileSystems Files]
            [java.nio.charset Charset]))
  
-;; Everything other than longest-fast-function was stolen from David Nolan.
+;; Everything other than longest-fast-functional was stolen from David Nolan.
 ;; =============================================================================
 ;; Paolo Style Fast Version 0.06 secs on MBA 1.7ghz
  
