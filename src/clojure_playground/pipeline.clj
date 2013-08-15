@@ -2,7 +2,7 @@
   (:require [ clojure.core.async :as async :refer [<!! >!! >! <! chan go]]))
 
 
-(defn enter-pipeline [x link out]
+(defn enter-pipeline [fns x link out]
   (go (loop [arg       x
              [f & fs]  fns]
         (go (try (let [res (f arg)]
@@ -22,6 +22,12 @@
                    (if (nil? x) 
                      (do 
                        (async/close! out) (async/close! link))
-                     (do (enter-pipeline x link out)
+                     (do (enter-pipeline fns x link out)
                          (recur))))))
       [in out]))
+
+(let [[in out] (pipeline
+                #(/ 1 %)
+                #(str "inverse=" %))]
+  (>!! in 5) (assert (= "inverse=1/5" (<!! out)))
+  (>!! in 0) (assert (instance? Exception (<!! out))))
