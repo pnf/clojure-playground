@@ -42,7 +42,7 @@
               wlen (.length h)]
           (if (> wlen maxlen)
             (if-let [word' (seen h) #_(.get seen h)]
-              (recur (inc i) wlen [word' word] (hash-map))
+              (recur (inc i) wlen [word' word] (hash-map)) ;blow away entries we'll never use
               (recur (inc i) maxlen result (assoc seen h word)))
             (recur (inc i) maxlen result seen)))
         result))))
