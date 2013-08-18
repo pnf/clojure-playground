@@ -31,17 +31,20 @@
             (recur (inc i) maxlen result)))
         result))))
 
+
 (defn longest-fast-functional []
   (let [ws   (words-fast)]
     (loop [i 0 maxlen 0 result nil seen (hash-map)]
+      (bleh.Noop/noop seen)
       (if (< i (.size ws))
         (let [^String word (.get ws i)
               arr  (.toCharArray word)
               _    (Arrays/sort arr)
               h    (String. arr)
+              ;h     (apply str (sort (seq word)))  ; this is disastrously slow
               wlen (.length h)]
           (if (> wlen maxlen)
-            (if-let [word' (seen h) #_(.get seen h)]
+            (if-let [word' (seen h)]
               (recur (inc i) wlen [word' word] (hash-map)) ;blow away entries we'll never use
               (recur (inc i) maxlen result (assoc seen h word)))
             (recur (inc i) maxlen result seen)))
