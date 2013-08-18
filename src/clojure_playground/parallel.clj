@@ -1,5 +1,5 @@
 (ns clojure-playground.parallel
-  (:require [ clojure.core.async :as async :refer [<!! >!! timeout chan alt!!]] )
+  (:require [ clojure.core.async :as async :refer [<!! >!! timeout chan alt!! go close!]] )
 )
 
 
@@ -13,7 +13,6 @@
           (nil? h2) (concat (reverse acc) l1)
           :else (let [[h l t] (if (> h1 h2) [h2 l1 t2] [h1 l2 t1])]
                   (recur l t (cons h acc))))))
-
 
 (defn msort [l] (if (< (count l) 2) l
                     (let [[l1 l2] (split-at (-> l count (/ 2) int) l)]
@@ -183,8 +182,68 @@
                   (merge (assoc-reduce-1t l1) (assoc-reduce-1t l2)))))]
     (impoverish (avenir-await (assoc-reduce-mt in) timeout-ms))))
 
+
+
 #_ (
     (time (count (assoc-reduce (repeatedly 100000 rand) merge-lists)))
     (time (count (avenir-assoc-reduce (repeatedly 100000 rand) merge-lists)))
     (time (count (avenir-assoc-reduce (repeatedly 100000 rand) merge-lists :minpar 1000)))
 )
+
+; Execute in a go block and try to put the result on the channel repeatedly, forever.
+; Would be nice to stop when this was closed...
+(defn zukunft-call [func0]
+  (let [c (chan 1)]
+    (go (let [res (func0)] (while (not @(.closed c)) (>! c res))))
+    c))
+
+(defn zukunft-map  
+  ([f z-in]
+     (let [z-out (chan 1)]
+       ; wait on input channel
+       (go (let [r (f (<! z-in))]
+             ; keep broadcasting until input closed
+             (while (not @(.closed z-in)) (>! z-out r))
+             (close! z-out)))
+       z-out))
+  ([f z1 z2 & zs]  ; require all results
+     (let [zs    (concat [z1 z2] zs)
+           z-out (chan 1)
+           rs    (atom {})
+           done  (chan 1)]
+       ; wait for all inputs in parallel
+       (doall (for [z-in zs] 
+                (go (let [r (<! z-in)]
+                      (swap! rs #(assoc % z-in r))
+                      ;when all in, signal completion
+                      (when (= (count @rs) (count zs))
+                        (>! done 1))))))
+       (go (let [_    (<! done)
+                 r    (apply f (map @rs zs))]
+             (while (not (.closed @(first zs))) (>! z-out r))
+             (close! z-out)))
+       z-out)))
+
+(defmacro zukunft
+  "Takes a body of expressions and yields an agent which will
+   receive the result."
+  [& body] `(zukunft-call (^{:once true} fn* [] ~@body)))
+
+#_(
+        latch
+          |
+          f       wait on the latch, then emit random double
+        /   \
+      g1    g2    embed the double in a string
+        \   /
+          h       combine the strings
+          |
+
+   (def latch (new java.util.concurrent.CountDownLatch 1))
+   (def f (zukunft (do (.await latch) (.nextDouble (java.util.Random.)))))
+   (def g1 (zukunft-map #(str "My favorite number is " % " ") f))
+   (def g2 (zukunft-map #(str "But mine is " (* % 2) " ") f))
+   (def h (zukunft-map #(println (str %1 %2)) g1 g2 ))
+
+   (.countDown latch)
+ )
