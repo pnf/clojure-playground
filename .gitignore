@@ -3,6 +3,8 @@
 /classes
 /checkouts
 /resources/public/js/*
+/out
+.repl
 pom.xml
 pom.xml.asc
 *.jar

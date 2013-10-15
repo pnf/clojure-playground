@@ -8,21 +8,24 @@
   :dependencies [[org.clojure/clojure "1.5.1"]
                  [org.clojure/data.xml "0.0.7"]
                  [org.clojure/data.zip "0.1.1"]
+                 [cascalog/cascalog-core "2.0.0-SNAPSHOT"]
+                 [org.apache.hadoop/hadoop-core "1.0.3"]
                  [org.clojure/core.async "0.1.0-SNAPSHOT"]
                  [org.clojure/math.numeric-tower "0.0.2"]
-                 [org.clojure/core.typed "0.1.19"]
+                 [org.clojure/core.typed "0.2.12"]
+                 ;[org.clojure/core.typed "0.1.19"]
                  [org.apache.commons/commons-email "1.3.1"]
                  [org.zeromq/cljzmq "0.1.2-SNAPSHOT"]
                  [org.clojure/clojurescript "0.0-1853"]
-                 [org.clojure/core.match "0.2.0-rc5"]
+                 [org.clojure/core.match "0.2.0"]
                  [com.cemerick/piggieback "0.1.0"]
                  [compojure "1.1.5"]
                  [jayq "2.4.0"]
                  [ring "1.2.0"]
                  [prismatic/dommy "0.1.1"]
-]
+                 [org.clojure/algo.monads "0.1.4"]
+                 [com.datomic/datomic-free "0.8.4159"]]
 
-  :repl-options {:nrepl-middleware [cemerick.piggieback/wrap-cljs-repl]}
 
   :plugins [[lein-cljsbuild "0.3.2"]
             [lein-ring "0.8.5"]]
@@ -42,7 +45,7 @@
   :cljsbuild 
   {; :crossovers [nanfott.parse]
    :builds
-   [{:id "cljs"
+   [{:id "playground"
      :source-paths ["src/cljs"]
      :compiler {:optimizations :whitespace
                 :pretty-print true
@@ -51,7 +54,7 @@
                 }}]}
 
 
-  :jvm-opts ["-Djava.library.path=/usr/lib:/usr/local/lib"] 
+  :jvm-opts ["-Djava.library.path=/usr/lib:/usr/local/lib -Xmx768m"]
   :java-source-paths ["src/java"]
 )
 
