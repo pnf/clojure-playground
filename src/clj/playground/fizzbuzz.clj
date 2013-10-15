@@ -31,3 +31,18 @@
            (lazy-seq (fb3 (inc n) n
                           (if (zero? c3) ["fizz" 2] [nil (dec c3)])
                           (if (zero? c5) ["buzz" 4] [nil (dec c5)]))))))
+
+
+
+(defn fb4 []
+  (map (fn [n] (match [(mod n 3) (mod n 5)]
+                      [0 0] "fizzbuzz"
+                      [0,_] "fizz"
+                      [0,_] "buzz"
+                      :else n)) (iterate inc 1)))
+
+(defn fb5 [] 
+  (map #(apply str (or (seq (str (get ["fizz"] (mod % 3))
+                                 (get ["buzz"] (mod % 5))))
+                       [%]))
+       (iterate inc 1)))
