@@ -69,5 +69,5 @@
     [res E (* T (- 1.0 dT)) dT]))
 
 ; "n..y|ta|p.l|ra|ard|ma|w....n|ga|...r.e|h....$|..ol"
-; "ln|coo|di|n.e|^.ay|^.ie|l.o|ma|oe|.h....|ga|a.t$|po"
-; (nth (iterate step [initial (energy initial) 1000.0 0.0001]) 100000)
+; (nth (iterate step [initial (energy initial) 100.0 0.00004]) 200000)
+
