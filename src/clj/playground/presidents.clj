@@ -78,6 +78,7 @@
     [res E (* T (- 1.0 dT)) dT]))
 
 ; (nth (iterate step [initial (energy initial) 100.0 0.00004]) 200000)
-; "n..y|ta|p.l|ra|ard|ma|w....n|ga|...r.e|h....$|..ol"
+;           n..y|ta|p.l|ra|ard|ma|w....n|ga|...r.e|h....$|..ol
+;Norvig's : a.a|a..i|j|li|a.t|i..n|bu|oo|n.e|ay.|r.e$|tr|ls|po|v.l
 
 
