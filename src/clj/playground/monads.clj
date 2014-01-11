@@ -8,6 +8,18 @@
                 cont-m run-cont call-cc
                 maybe-t)]))
 
+#_(domonad bleh-m
+           [a exa
+            b exb]
+           exc)
+; expands to
+#_(with-monad bleh-m
+    (m-bind exa (fn [a]
+    (m-bind exb (fn [b]
+    (m-result exc))))))
+
+; Somewhat confusingly, this library combines a sort of threading with actual monads
+
 (domonad sequence-m
          [x (range 5)
           y (range 3)]
