@@ -53,11 +53,11 @@
 (def perturbations
   (reduce #(conj %1 [(+ (first (last  %1)) (first %2)) (second %2)])
           [[0.0 identity]]
-          [[100 add-back]
+          [[10 add-back]
            [500 yank]
            [100 dot]
            [100 decapitate]
-           [500 chop]]))
+           [100 chop]]))
 
 ; Apply a random perturbation
 (defn perturb [res]
@@ -66,20 +66,22 @@
     (f res)))
 
 ; Ooh, let's be all physicsy.  Just adding up length of the regexp.
-(defn energy [res] (+ (count res) (reduce + (map count res))))
+(defn energy [res] (dec  (+ (count res) (reduce + (map count res)))))
 
 ; An iterative step of MH
 ;  res  - set of |-able regexp components
 ;  E    - its energy
 ;  T    - current temperature
 ;  dT   - will multiply T by (1-dT) at each step
-(defn step [[res E T dT n dn]]
+(defn step [[res E minE T dT n dn]]
   (let [res2     (perturb res)
         E2       (energy res2)
         [res E]  (if (and (check res2) (> (Math/exp (/  (- E E2) T)) (rand))) [res2 E2] [res E])
-        ret      [res E (* T (- 1.0 dT)) dT (inc n) dn]
+        newMinE  (min E minE)
+        ret      [res E newMinE (* T (- 1.0 dT)) dT (inc n) dn]
         rx       (str/join "|" res)]
-    (when (zero? (mod n dn)) (println (count rx) rx T))
+    (when (< newMinE minE) (println "***" E (str/join "|" res) ret ))
+    (when (or (< newMinE minE) (zero? (mod n dn))) (println ret))
     ret
     ))
 ; (nth (iterate step [initial (energy initial) 100.0 0.00004]) 200000)
