@@ -26,7 +26,7 @@
          (not (some #(re-find re %) losers)))))
 
 (defn get-rand-gt1 
-  "Fetch a re, as long as we have at least ne"
+  "Fetch a re, of length at least two as long as we have at least one"
   [res]
   (let [cands (filter #(> (count %) 1) res)]
     (if (seq cands) (rand-nth cands) nil)))
@@ -92,28 +92,28 @@
 
 (defn steps
   "An iterative step of MH
-     state0 - initial state
+     S0 - initial state
      energy - fn that calculates energy of state
+     perturb - fn to perturb the state
      T    - current temperature
      dT   - will multiply T by (1-dT) at each step"
-  [state0 energy T dT]
-  (letfn [(step [[state E T]]
-            (let [state2     (perturb state)
-                  E2       (energy state2)
-                  [state E]  (if (and E2 (> (Math/exp (/  (- E E2) T)) (rand)))
-                               [state2 E2] [state E])]
-              [state E (* T (- 1.0 dT))]))]
-    (iterate step [state0 (energy state0) T])))
+  [S0 energy perturb T dT]
+  (letfn [(step [[S E T]]
+            (let [S2     (perturb S)
+                  E2       (energy S2)
+                  [S E]  (if (and E2 (> (Math/exp (/  (- E E2) T)) (rand)))
+                               [S2 E2] [S E])]
+              [S E (* T (- 1.0 dT))]))]
+    (iterate step [S0 (energy S0) T])))
 
 (defn annotate
   "Filter output of MH step sequence, annotating interesting ones, either every dnth or when
    energy is reduced by dE.  If either is nil, don't comment on that."
   [steps dn dE]
   (letfn [(annotate* [steps n minE]
-            (let [step           (first steps)
-                  [state E T] step
+            (let [[S E T]           (first steps)
                   newMinE     (if minE (min E minE) E)
-                  out1        (when (and dE minE (<= dE (- minE newMinE))) (str "*** " E " " (str/join "|" (first step))))
+                  out1        (when (and dE minE (<= dE (- minE newMinE))) (str "*** " E " " (str/join "|" S)))
                   out2        (when (and dn (zero? (mod n dn))) (str n " " step))
                   tail        (lazy-seq (annotate* (next steps) (inc n) newMinE))]
               (if (or out1 out2) (cons  (str out1 out2) tail) tail)))]
@@ -123,6 +123,6 @@
   "Print everything from a sequence as fast as possible, discarding head."
   [xs] (doseq [x  xs] (println x)))
 
-;(print-all (take 10000 (annotate (steps initial energy 5.0 0.0000001) nil 1)))
+;(print-all (take 10000 (annotate (steps initial energy perturb 5.0 0.0000001) nil 1)))
 ;PF : n.e|ho|ls|a.t|a..i|j|^n|bu|v.l|ma|a.a|ay.|r.e$|li|po
 ;PN : a.a|a..i|j|li|a.t|i..n|bu|oo|n.e|ay.|r.e$|tr|ls|po|v.l
