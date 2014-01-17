@@ -1,33 +1,41 @@
 (ns playground.reactive)
 
-(defn sully [dag k]
+
+(defn- sully
+  "Set dirty bit at k and in all dependents"
+  [dag k]
   (loop [dag                  dag
          [[k depth] & stack]  (list [k 0])
-         seen                #{}]
+         seen                 #{}]
     (cond 
      (not k)  dag
-     (seen k) (recur dag stack seen)
-     true     (recur (if (get-in dag [k :function])
-                       (assoc-in dag [k :dirty] true) dag)
+     (or (get-in dag [k :dirty]) (seen k)) (recur dag stack seen)
+     true     (recur (if (get-in dag [k :function])  (assoc-in dag [k :dirty] true) dag)
                      (concat (map vector
                                   (get-in dag [k :deps] #{})
                                   (repeat (inc depth)))
                              stack)
                      (conj seen k)))))
 
-(defn dispossess [dag k]
+(defn- dispossess 
+  "Remove dependency on us, if we're a function."
+  [dag k]
   (if-let [kargs (get-in dag [k :args])]
     (reduce (fn [dag karg] (update-in dag [karg :deps] #(disj % k))) dag kargs))
   dag)
 
-
-(defn set-val* [dag k v]
+(defn set-val* 
+  "Set a regular value here, and clean up this was previously a function.  E.g. (set-val* :a 30)"
+  [dag k v]
   (-> dag
       (dispossess k)
       (assoc-in [k :value] v)
       (sully k)))
 
-(defmacro set-val [dag k v] `(set-val* ~dag ~(keyword k) ~v))
+(defmacro set-val
+  "Set a regular value here, and clean up this was previously a function.  E.g. (set-val a 30)"
+  [dag k v]
+  `(set-val* ~dag ~(keyword k) ~v))
 
 (defn ensure-val* [dag k]
   (let [node        (get dag k)
@@ -44,7 +52,6 @@
 
 (defn get-val* [dag k]  (get-in (ensure-val* dag k) [k :value]))
 (defmacro get-val [dag k] `(get-val* ~dag ~(keyword k)))
-
 
 (defn- set-deps [dag kf kargs]
   (reduce (fn [dag k] (update-in dag [k :deps] #(if % (conj % kf) #{kf}))) dag kargs))
