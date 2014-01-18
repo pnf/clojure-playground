@@ -1,4 +1,5 @@
-(ns playground.reactive)
+(ns playground.reactive
+  (:require [clojure.algo.monads :as m]))
 
 
 (defn- sully
@@ -50,7 +51,10 @@
 
 (defmacro ensure-val [dag k] `(ensure-val* ~dag ~(keyword k)))
 
-(defn get-val* [dag k]  (get-in (ensure-val* dag k) [k :value]))
+(defn get-val* [dag k] 
+  (let [dag (ensure-val* dag k)]
+    [dag (get-in dag [k :value])]))
+
 (defmacro get-val [dag k] `(get-val* ~dag ~(keyword k)))
 
 (defn- set-deps [dag kf kargs]
@@ -64,6 +68,12 @@
         (set-deps k kargs)
         (assoc-in [k :function] f)))
 
+(defmacro rfn [args & forms]
+  (let [kargs    (map #(keyword %) args)
+        vs       (map (fn [k] `(get-in ~'dag [~k :value])) kargs)
+        bindings (mapcat list args vs)]
+    `(fn [~'dag] (let [~@bindings] ~@forms))))
+
 
 (defmacro set-fn [dag k args & forms]
   (let [kargs    (map #(keyword %) args)
@@ -72,8 +82,18 @@
     `(set-fn* ~dag ~(keyword k) [~@kargs] (fn [~'dag] (let [~@bindings] ~@forms)))))
 
 (defn pridentity [x]
-  (println x)
-  x)
+  (println x)  x)
+
+(defn set-val-s* [k val]
+  (fn [dag] [nil (set-val* dag k val)]))
+
+(defn set-fn-s* [k args f]
+  (fn [dag] [nil (set-fn* dag k args f) ]))
+
+(defn get-val-s* [k]
+  (fn [dag]
+    (let [[dag v] (get-val* dag k)]
+      [v dag])))
 
 #_(-> {}
     (set-val :a 1)
@@ -99,3 +119,11 @@
     (set-fn c [a b] (+ a b))
     pridentity
     (ensure-val c) pridentity (set-val a 42) pridentity (ensure-val c) pridentity (set-val b 8) (ensure-val c) pridentity (set-val c 5))
+
+#_((m/domonad m/state-m 
+                [_  (set-val-s* :a 1)
+                 _  (set-val-s* :b 2)
+                 _  (set-fn-s*  :c [:a :b] (rfn [a b] (+ a b)))
+                 v  (get-val-s* :c)]
+                v) {})
+
