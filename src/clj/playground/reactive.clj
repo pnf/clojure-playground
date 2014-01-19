@@ -1,44 +1,49 @@
 (ns playground.reactive
   (:require [clojure.algo.monads :as m]))
 
+#_(
+The basic structure of the dag is
+  {:keyword {:dirty trueOrFalse
+             :deps  #{namesThatDependOnUs}
+             :value setOrCalculated
+             :function functionOfDagThatReturnsValue
+   }}
+)
+
 
 (defn- sully
-  "Set dirty bit at k and in all dependents"
+  "Set dirty bit at k (if this is a function node) and in all dependents (in any case)."
   [dag k]
+  ; Stack is a list of [:keyword depth] tuples.
   (loop [dag                  dag
-         [[k depth] & stack]  (list [k 0])
-         seen                 #{}]
+         [[k depth] & stack]  (list [k 0])]
     (cond 
      (not k)  dag
-     (or (get-in dag [k :dirty]) (seen k)) (recur dag stack seen)
+     (get-in dag [k :dirty]) (recur dag stack)
      true     (recur (if (get-in dag [k :function])  (assoc-in dag [k :dirty] true) dag)
                      (concat (map vector
                                   (get-in dag [k :deps] #{})
                                   (repeat (inc depth)))
-                             stack)
-                     (conj seen k)))))
+                             stack)))))
 
 (defn- dispossess 
-  "Remove dependency on us, if we're a function."
+  "Remove all dependencies on us, if we're a function."
   [dag k]
   (if-let [kargs (get-in dag [k :args])]
     (reduce (fn [dag karg] (update-in dag [karg :deps] #(disj % k))) dag kargs))
   dag)
 
 (defn set-val* 
-  "Set a regular value here, and clean up this was previously a function.  E.g. (set-val* :a 30)"
+  "Set a regular value here, dirty all dependents, and clean up this was previously a function.  E.g. (set-val* :a 30)"
   [dag k v]
   (-> dag
       (dispossess k)
       (assoc-in [k :value] v)
       (sully k)))
 
-(defmacro set-val
-  "Set a regular value here, and clean up this was previously a function.  E.g. (set-val a 30)"
-  [dag k v]
-  `(set-val* ~dag ~(keyword k) ~v))
-
-(defn ensure-val* [dag k]
+(defn ensure-val*
+  "Ensure that a value is available for :k by evaluating all necessary function nodes."
+  [dag k]
   (let [node        (get dag k)
         function    (get node :function)
         dirty       (get node :dirty)]
@@ -49,16 +54,12 @@
           (assoc-in [k :dirty] false))      
       dag)))
 
-(defmacro ensure-val [dag k] `(ensure-val* ~dag ~(keyword k)))
 
-(defn get-val* [dag k] 
+(defn get-val*
+  "Retrieve value for :k, ensuring first that it's been calculated if necessary."
+  [dag k] 
   (let [dag (ensure-val* dag k)]
     [dag (get-in dag [k :value])]))
-
-(defmacro get-val [dag k] `(get-val* ~dag ~(keyword k)))
-
-(defn- set-deps [dag kf kargs]
-  (reduce (fn [dag k] (update-in dag [k :deps] #(if % (conj % kf) #{kf}))) dag kargs))
 
 (defn set-fn* [dag k kargs f]
   (-> dag
@@ -68,6 +69,8 @@
         (set-deps k kargs)
         (assoc-in [k :function] f)))
 
+#_(Purty macro version that let us write keywords as if they were symbols.)
+
 (defmacro rfn [args & forms]
   (let [kargs    (map #(keyword %) args)
         vs       (map (fn [k] `(get-in ~'dag [~k :value])) kargs)
@@ -75,25 +78,59 @@
     `(fn [~'dag] (let [~@bindings] ~@forms))))
 
 
-(defmacro set-fn [dag k args & forms]
+(defmacro set-fn
+  "Set a function node, e.g.
+   (set-fn dag calcdNode [param1 param2] (foo param1 param2))"
+  [dag k args & forms]
   (let [kargs    (map #(keyword %) args)
         vs       (map (fn [k] `(get-in ~'dag [~k :value])) kargs)
         bindings (mapcat list args vs)]
     `(set-fn* ~dag ~(keyword k) [~@kargs] (fn [~'dag] (let [~@bindings] ~@forms)))))
 
-(defn pridentity [x]
-  (println x)  x)
+(defmacro set-val
+  "Set a regular value here, and clean up this was previously a function.  E.g. (set-val a 30)"
+  [dag k v]
+  `(set-val* ~dag ~(keyword k) ~v))
+
+(defmacro ensure-val [dag k] `(ensure-val* ~dag ~(keyword k)))
+
+(defmacro get-val [dag k] `(get-val* ~dag ~(keyword k)))
+
+(defn- set-deps [dag kf kargs]
+  (reduce (fn [dag k] (update-in dag [k :deps] #(if % (conj % kf) #{kf}))) dag kargs))
+
+
+#_( All the -s functions are state monads, that is, closure functions from dag to [result dag])
 
 (defn set-val-s* [k val]
   (fn [dag] [nil (set-val* dag k val)]))
 
+
 (defn set-fn-s* [k args f]
-  (fn [dag] [nil (set-fn* dag k args f) ]))
+  (fn [dag] [nil (set-fn* dag k args f)]))
 
 (defn get-val-s* [k]
   (fn [dag]
     (let [[dag v] (get-val* dag k)]
       [v dag])))
+
+#_(Pretty versions of the state monads)
+
+
+(defmacro set-val-s [k v] `(set-val-s* ~(keyword k) ~v))
+
+(defmacro set-fn-s [k args & forms]
+  `(set-fn-s* ~(keyword k) ~(vec (map keyword args)) (rfn ~args ~@forms)))
+
+(defmacro get-val-s [k] `(get-val-s* ~(keyword k)))
+
+(defmacro print-val-s [k & stuff]
+  `(m/with-monad m/state-m (m/m-fmap #(println ~@stuff (str ~(str k) "=" %)) (get-val-s ~k))))
+(defn pridentity [x]  (println x)  x)
+
+(defn print-state-s [& stuff]
+  (fn [dag] (apply println (concat stuff dag)) [nil dag]))
+
 
 #_(-> {}
     (set-val :a 1)
@@ -127,3 +164,29 @@
                  v  (get-val-s* :c)]
                 v) {})
 
+#_((m/domonad m/state-m 
+              [_  (set-val-s a 1)
+               _  (set-val-s b 2)
+               _  (set-fn-s  c [a b] (+ a b))
+               v  (get-val-s c)
+               ]
+              v) {})
+
+
+
+#_((m/domonad m/state-m 
+              [_  (set-val-s a 1)
+               _  (set-val-s b 2)
+               _  (set-fn-s  c [a b] (+ a b))
+	       _  (print-val-s c "a=1, b=2, c=a+b")
+               _  (set-fn-s  d [b c] (* b c))
+	       _  (print-val-s d "d=b*c")
+	       _  (set-val-s a 2)
+	       _  (print-val-s c "a=2")
+	       _  (print-val-s d "a=2")
+	       _  (set-val-s b 5)
+	       _  (print-val-s c "b=5")
+	       _  (print-val-s d "b=5")
+               v  (get-val-s d)
+               ]
+              v) {})
