@@ -10,6 +10,7 @@
                  [org.clojure/data.zip "0.1.1"]
                  [cascalog/cascalog-core "2.0.0-SNAPSHOT"]
                  [org.apache.hadoop/hadoop-core "1.0.3"]
+                 [org.apache.commons/commons-math3 "3.2"]
                  [org.clojure/core.async "0.1.0-SNAPSHOT"]
                  [org.clojure/math.numeric-tower "0.0.2"]
                  [org.clojure/core.typed "0.2.19"]

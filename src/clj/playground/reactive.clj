@@ -1,5 +1,7 @@
 (ns playground.reactive
-  (:require [clojure.algo.monads :as m]))
+  (:require [clojure.algo.monads :as m])
+  (:import (org.apache.commons.math3.special Erf)
+           (java.lang Math) ))
 
 #_(
 The basic structure of the dag is
@@ -32,6 +34,11 @@ The basic structure of the dag is
   (if-let [kargs (get-in dag [k :args])]
     (reduce (fn [dag karg] (update-in dag [karg :deps] #(disj % k))) dag kargs))
   dag)
+
+(defn- set-deps [dag kf kargs]
+  (reduce (fn [dag k] (update-in dag [k :deps] #(if % (conj % kf) #{kf}))) dag kargs))
+
+
 
 (defn set-val* 
   "Set a regular value here, dirty all dependents, and clean up this was previously a function.  E.g. (set-val* :a 30)"
@@ -96,8 +103,7 @@ The basic structure of the dag is
 
 (defmacro get-val [dag k] `(get-val* ~dag ~(keyword k)))
 
-(defn- set-deps [dag kf kargs]
-  (reduce (fn [dag k] (update-in dag [k :deps] #(if % (conj % kf) #{kf}))) dag kargs))
+(defmacro gv [dag k] `(second (get-val* ~dag ~(keyword k))))
 
 
 #_( All the -s functions are state monads, that is, closure functions from dag to [result dag])
@@ -124,7 +130,9 @@ The basic structure of the dag is
 
 (defmacro get-val-s [k] `(get-val-s* ~(keyword k)))
 
-(defmacro print-val-s [k & stuff]
+(defmacro print-val-s
+  "Retrieve and print out k, while maintaining the monad chain."
+  [k & stuff]
   `(m/with-monad m/state-m (m/m-fmap #(println ~@stuff (str ~(str k) "=" %)) (get-val-s ~k))))
 (defn pridentity [x]  (println x)  x)
 
@@ -168,16 +176,13 @@ The basic structure of the dag is
               [_  (set-val-s a 1)
                _  (set-val-s b 2)
                _  (set-fn-s  c [a b] (+ a b))
-               v  (get-val-s c)
-               ]
+               v  (get-val-s c)]
               v) {})
-
-
 
 #_((m/domonad m/state-m 
               [_  (set-val-s a 1)
                _  (set-val-s b 2)
-               _  (set-fn-s  c [a b] (+ a b))
+               _  (set-fn-s c [a b] (+ a b))
 	       _  (print-val-s c "a=1, b=2, c=a+b")
                _  (set-fn-s  d [b c] (* b c))
 	       _  (print-val-s d "d=b*c")
@@ -190,3 +195,23 @@ The basic structure of the dag is
                v  (get-val-s d)
                ]
               v) {})
+
+(defn option []
+      (-> {}
+          (set-val K 101.0)
+          (set-val S 100.0)
+          (set-val T 1.0)
+          (set-val r 0.01)
+          (set-val sigma 0.35)
+          (set-fn d1 [S T K r sigma] (/ (+ (Math/log (/ S K))  (* (+ r (/ (* sigma sigma) 2)) T)) (* sigma (Math/sqrt T))))
+          (set-fn d2 [d1 T sigma] (- d1 (* sigma (Math/sqrt T))))
+          (set-fn c [S T K r d1 d2] (- (* S (N d1)) (* K (Math/exp (* (- r) T)) (N d2))))
+          (set-fn p [S T K r d1 d2] (- (* K (Math/exp (* (- r) T)) (N (- d2))) (* S (N (- d1)))))
+          (set-fn delta [c S] (/ (- (-> dag (set-val :S (+ S 0.01)) (gv c)) c) 0.01 ))))
+
+(defn delta [option]
+  (let [S0 (gv option S)
+        c0  (gv option c)
+        S1 (+ S0 0.01)
+        c1 (-> option (set-val S S1) (gv c))]
+    (/ (- c1 c0) 0.01)))
