@@ -129,7 +129,7 @@ APersistentSet [[[a :variance :covariant]]
                  IPersistentSet (IPersistentSet a)}] )
 
 
-(defn dfs [o f-pre f-seen f-kids]
+#_(defn dfs [o f-pre f-seen f-kids]
   (loop [ [[o depth] & stack]  (list [o 0])
          seen                #{}         ]
     (when o
@@ -141,10 +141,19 @@ APersistentSet [[[a :variance :covariant]]
         (recur (concat (map vector (f-kids o) (repeat (inc depth))))
                (conj seen o))))))
 
-(defn inh-graph [o]  (dfs (.getClass o)
+#_(defn inh-graph [o]  (dfs (.getClass o)
                           #(println (apply str (repeat %1 " ")) %2)
                           #(println (apply str (repeat %1 " ")) "..." )
                           #(let [ifcs (seq (.getInterfaces %))
                                  sc   (.getSuperclass %)]
                              (if sc (conj ifcs sc) ifcs))))
 
+
+(t/def-alias MMap "bleh" (All [a [a1 :< a :> a]] (t/Map (t/Set a) (t/Vec a1))))
+
+(t/ann blort [(t/Map (t/Set String) (t/Seq t/AnyInteger)) (t/Set String)  (t/Seq t/AnyInteger)  ->  (t/Map (t/Set String) (t/Seq t/AnyInteger)) ]   )
+
+(t/ann blort (All [a [a1 :< a :> a]] (Fn [(t/Map (t/Set a) (t/Vec a1)) (t/Set a1) (t/Vec a1) -> (t/Map (t/Set a1) (t/Vec a1)) ])))
+
+(defn blort [m k v]
+  (assoc m k v))

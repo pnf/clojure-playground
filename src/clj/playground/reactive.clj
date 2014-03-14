@@ -5,28 +5,17 @@
 
 #_(
 The basic structure of the dag is
-  {:keyword {:dirty trueOrFalse
-             :deps  #{namesThatDependOnUs}
-             :value setOrCalculated
-             :function functionOfDagThatReturnsValue
-   }}
-)
+  {:nodename {:dirty    trueOrFalse
+              :deps     #{namesThatDependOnUs}
+              :value    value
+              :function functionOfDagThatReturnsValue}})
 
-
-(defn- sully
-  "Set dirty bit at k (if this is a function node) and in all dependents (in any case)."
-  [dag k]
-  ; Stack is a list of [:keyword depth] tuples.
-  (loop [dag                  dag
-         [[k depth] & stack]  (list [k 0])]
-    (cond 
-     (not k)  dag
-     (get-in dag [k :dirty]) (recur dag stack)
-     true     (recur (if (get-in dag [k :function])  (assoc-in dag [k :dirty] true) dag)
-                     (concat (map vector
-                                  (get-in dag [k :deps] #{})
-                                  (repeat (inc depth)))
-                             stack)))))
+(defn- sully [dag k]
+  (if (get-in dag [k :dirty]) dag
+    (let [isfn (get-in dag [k :function]) 
+          dag  (if-not isfn dag (assoc-in dag [k :dirty] true))
+          deps (get-in dag [k :deps])]
+      (reduce sully dag deps))))
 
 (defn- dispossess 
   "Remove all dependencies on us, if we're a function."
@@ -54,12 +43,11 @@ The basic structure of the dag is
   (let [node        (get dag k)
         function    (get node :function)
         dirty       (get node :dirty)]
-    (if (and function dirty)
+    (if-not (and function dirty) dag
       (-> dag
           (as-> % (reduce ensure-val* % (node :args)))
           (as-> % (assoc-in % [k :value] (function %)))
-          (assoc-in [k :dirty] false))      
-      dag)))
+          (assoc-in [k :dirty] false)))))
 
 
 (defn get-val*
@@ -71,10 +59,9 @@ The basic structure of the dag is
 (defn set-fn* [dag k kargs f]
   (-> dag
         (assoc-in [k :args] kargs)
-        (assoc-in [k :dirty] true)
+        (assoc-in [k :function] f)
         (sully k)
-        (set-deps k kargs)
-        (assoc-in [k :function] f)))
+        (set-deps k kargs)))
 
 #_(Purty macro version that let us write keywords as if they were symbols.)
 
@@ -91,7 +78,7 @@ The basic structure of the dag is
   [dag k args & forms]
   (let [kargs    (map #(keyword %) args)
         vs       (map (fn [k] `(get-in ~'dag [~k :value])) kargs)
-        bindings (mapcat list args vs)]
+        bindings (interleave args vs)]
     `(set-fn* ~dag ~(keyword k) [~@kargs] (fn [~'dag] (let [~@bindings] ~@forms)))))
 
 (defmacro set-val
@@ -163,7 +150,12 @@ The basic structure of the dag is
     pridentity
     (set-fn c [a b] (+ a b))
     pridentity
-    (ensure-val c) pridentity (set-val a 42) pridentity (ensure-val c) pridentity (set-val b 8) (ensure-val c) pridentity (set-val c 5))
+    (ensure-val c) pridentity
+    (set-val a 42) pridentity
+    (ensure-val c) pridentity
+    (set-val b 8)
+    (ensure-val c) pridentity
+    (set-val c 5))
 
 #_((m/domonad m/state-m 
                 [_  (set-val-s* :a 1)
@@ -195,6 +187,8 @@ The basic structure of the dag is
                v  (get-val-s d)
                ]
               v) {})
+
+(defn N [x] (/ (+ 1.0 (Erf/erf (/ x (Math/sqrt 2.0)))) 2.0))
 
 (defn option []
       (-> {}

@@ -13,7 +13,7 @@
                  [org.apache.commons/commons-math3 "3.2"]
                  [org.clojure/core.async "0.1.0-SNAPSHOT"]
                  [org.clojure/math.numeric-tower "0.0.2"]
-                 [org.clojure/core.typed "0.2.19"]
+                 [org.clojure/core.typed "0.2.26"]
                  [org.apache.commons/commons-email "1.3.1"]
                  [org.zeromq/cljzmq "0.1.2-SNAPSHOT"]
                  [org.clojure/clojurescript "0.0-1853"]
