@@ -128,27 +128,6 @@ APersistentSet [[[a :variance :covariant]]
                                               (APersistentSet x)))
                  IPersistentSet (IPersistentSet a)}] )
 
-
-#_(defn dfs [o f-pre f-seen f-kids]
-  (loop [ [[o depth] & stack]  (list [o 0])
-         seen                #{}         ]
-    (when o
-      (f-pre depth o)
-      (if (seen o)
-        (do 
-          (f-seen depth o)
-          (recur stack seen))
-        (recur (concat (map vector (f-kids o) (repeat (inc depth))))
-               (conj seen o))))))
-
-#_(defn inh-graph [o]  (dfs (.getClass o)
-                          #(println (apply str (repeat %1 " ")) %2)
-                          #(println (apply str (repeat %1 " ")) "..." )
-                          #(let [ifcs (seq (.getInterfaces %))
-                                 sc   (.getSuperclass %)]
-                             (if sc (conj ifcs sc) ifcs))))
-
-
 (t/def-alias MMap "bleh" (All [a [a1 :< a :> a]] (t/Map (t/Set a) (t/Vec a1))))
 
 (t/ann blort [(t/Map (t/Set String) (t/Seq t/AnyInteger)) (t/Set String)  (t/Seq t/AnyInteger)  ->  (t/Map (t/Set String) (t/Seq t/AnyInteger)) ]   )
