@@ -28,8 +28,7 @@
 (assert (= ((fact5 fact5) 5) 120))
 
 ;; pull out the f, which doesn't depend on any lexical variables
-(def factgen (fn [g]
-           (fn [n] (if (= 0 n) 1 (* n (g (- n 1)))))))
+(def factgen (fn [g] (fn [n] (if (= 0 n) 1 (* n (g (- n 1)))))))
 
 ;; now pass f in as an argument
 (defn fact6 [f]
@@ -48,9 +47,11 @@
 (assert (= ((fact8 factgen) 5) 120))
 
 ;; rename it
-(defn Y [f]
-  ((fn [g] (g g))
-   (fn [h] (fn [n] ((f (h h)) n)))))
+(defn Y [f] ((fn [g] (g g))   (fn [h] (fn [n] ((f (h h)) n))))) 
+
+; Note that, unlike Haskell, this definition will cause a stack overflow.
+(defn Y2 [f]  ((fn [g] (g g)) (fn [h] (f (h h)))))
+
 (assert (= ((Y factgen) 5) 120))
 
 (defn rangegen [f] (fn [n] (if (= 0 n 0) () (conj (f (- n 1)) n))))
