@@ -18,3 +18,21 @@
                           #(let [ifcs (seq (.getInterfaces %))
                                  sc   (.getSuperclass %)]
                              (if sc (conj ifcs sc) ifcs))))
+
+
+;; From Chas Emerick's Clojure Programming.  Provides a skeleton of all the 
+;; methods necessary to implement something, e.g. (scaffold (clojure.lang.Cons))
+(defn scaffold
+  [interface]
+  (doseq [[iface methods] (->> interface
+                            .getMethods
+                            (map #(vector (.getName (.getDeclaringClass %))
+                                    (symbol (.getName %))
+                                    (count (.getParameterTypes %))))
+                            (group-by first))]
+    (println (str "  " iface))
+    (doseq [[_ name argcount] methods]
+      (println
+        (str "    "
+          (list name (into '[this] (take argcount (repeatedly gensym)))))))))
+
