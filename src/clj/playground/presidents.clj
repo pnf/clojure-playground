@@ -3,17 +3,23 @@
             [clojure.set :as sets])
   (:import (java.lang Math)))
 
-(def winners
+#_(def winners
   "Anyone who ever won the presidency."
   (set (str/split "washington adams jefferson jefferson madison madison monroe monroe adams jackson jackson vanburen harrison polk taylor pierce buchanan lincoln lincoln grant grant hayes garfield cleveland harrison cleveland mckinley mckinley roosevelt taft wilson wilson harding coolidge hoover roosevelt roosevelt roosevelt roosevelt truman eisenhower eisenhower kennedy johnson nixon nixon carter reagan reagan bush clinton clinton bush bush obama obama" #" ")))
 
-(def losers 
+#_(def winners (set (str/split  "acritan aesthophysiology amphimictical baruria calomorphic disarmature effusive fluted fusoid goblinize nihilistic noisefully picrorhiza postarytenoid revolutionize suprasphanoidal suspenseful tapachula transmit unversatile vibetoite" #" " )))
+
+(def winners (set (str/split  "000000000 000000003 000000006 000000009 000000012 000000015 066990060 140091876 173655750 312440187 321769005 368542278 390259104 402223947 443512431 714541758 747289572 819148602 878531775 905586303 953734824" #" " )))
+
+#(def losers 
   "Anyone who ran as a major party candidate but never won"
   (sets/difference  (set (str/split "clinton jefferson adams pinckney pinckney clinton king adams jackson adams clay vanburen vanburen clay cass scott fremont breckinridge mcclellan seymour greeley tilden hancock blaine cleveland harrison bryan bryan parker bryan roosevelt hughes cox davis smith hoover landon wilkie dewey dewey stevenson stevenson nixon goldwater humphrey mcgovern ford carter mondale dukakis bush dole gore kerry mccain romney" #" ")) winners ))
 
+(def losers 
+  (sets/difference  (set (str/split "abba anallagmatic bassarisk chorioallantois coccomyces commotive engrammatic glossoscopia hexacoralla hippogriffin inflammableness otto overattached saffarid sarraceniaceae scillipicrin tlapallan trillion unclassably unfitting unsmelled warrandice" #" ")) winners ))
 
-
-
+(def losers 
+  (sets/difference  (set (str/split " 000000005 000000008 000000010 000000011 000000014 018990130 112057285 159747125 176950268 259108903 333162608 388401457 477848777 478621693 531683939 704168662 759282218 769340942 851936815 973816159 979204403" #" ")) winners ))
 (def initial
   "Set of all winners, each sandwiched with anchors."
   (set (map #(str "^" % "$") winners)))
@@ -114,6 +120,7 @@
             (let [[S E T]           (first steps)
                   newMinE     (if minE (min E minE) E)
                   out1        (when (and dE minE (<= dE (- minE newMinE))) (str "*** " E " " (str/join "|" S)))
+                  step        (first steps)
                   out2        (when (and dn (zero? (mod n dn))) (str n " " step))
                   tail        (lazy-seq (annotate* (next steps) (inc n) newMinE))]
               (if (or out1 out2) (cons  (str out1 out2) tail) tail)))]
