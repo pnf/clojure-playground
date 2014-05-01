@@ -1,6 +1,13 @@
-(ns clojure-playground.parallel
-  (:require [ clojure.core.async :as async :refer [<!! >!! timeout chan alt!! go close!]] )
-)
+(ns playground.parallel
+  (:require [ clojure.core.async :as async :refer [<! >! <!! timeout chan alt!! go close!]] )
+(:use [clojure.algo.monads
+         :only (domonad with-monad m-lift m-seq m-reduce m-when
+                sequence-m
+                maybe-m
+                state-m fetch-state set-state 
+                writer-m write
+                cont-m run-cont call-cc
+                maybe-t)]))
 
 
 
@@ -252,3 +259,27 @@ until closed.
    (go (println (<! h)))
    (.countDown latch)
  )
+
+
+; cbind :: Chan c => c a -> (a -> c b) -> c b
+(defn cbind [c f]
+  (let [c2 (chan)]
+    (go (let [x (or  (<! c) [])]
+          (close! c)
+          (>! c2 (<! (apply f x)))))
+    c2))
+
+(defn cb-fn->chan-fn [f & args1]
+  (fn chan-fn [& args2]
+    (let [c    (chan)
+          cb   (fn [& res] (go (>! c res)  #_(close! c)) nil)
+          args (concat (or (seq  args1) args2) [cb])]
+      (apply f args)
+      c)))
+
+(defn fake-mkdir [dir cb] (let [c (timeout 2000)]
+                            (go (<! c)
+                                (println "made" dir)
+                                (cb dir)))
+  true)
+
