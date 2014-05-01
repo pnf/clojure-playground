@@ -260,6 +260,8 @@ until closed.
    (.countDown latch)
  )
 
+;; Experiment with channels as monads:
+#_(reduce cbind (timeout 0) (map #(cb-fn->chan-fn fake-mkdir %) (reduce  #(concat %1 [ (str (last %1) "/" %2) ]) [] ["1" "2" "3" "4"])))
 
 ; cbind :: Chan c => c a -> (a -> c b) -> c b
 (defn cbind [c f]
