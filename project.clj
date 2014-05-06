@@ -24,7 +24,13 @@
                  [ring "1.2.2"]
                  [prismatic/dommy "0.1.2"]
                  [org.clojure/algo.monads "0.1.5"]
-                 [com.datomic/datomic-free "0.9.4384" :exclusions [[org.slf4j/log4j-over-slf4j]]]]
+                 [digest "1.4.4"]
+                 [clj-time "0.7.0"]
+                 [com.datomic/datomic-free "0.9.4755" :exclusions [[org.slf4j/log4j-over-slf4j]]]]
+
+  :jvm-opts  ^:replace ["-Xmx1g" "-server" ] 
+;["-Djava.library.path=/usr/lib:/usr/local/lib -Xmx1g"]
+  :java-source-paths ["src/java"]
 
 
   :plugins [[lein-cljsbuild "0.3.2"]
@@ -54,8 +60,6 @@
                 }}]}
 
 
-  :jvm-opts ["-Djava.library.path=/usr/lib:/usr/local/lib -Xmx768m"]
-  :java-source-paths ["src/java"]
 )
 
 
