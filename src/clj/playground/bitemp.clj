@@ -72,20 +72,27 @@
   ([T]
      (condp = (type T)
        java.lang.Long (java.util.Date. T)
+       java.lang.Integer (java.util.Date. (long T))
        java.util.Date T
-       java.lang.String (-> T co/from-string co/to-date)
+       java.lang.String (-> T co/from-string co/to-date)))
+  ([] (java.util.Date.)))
 
-))
-  ([] (java.util.Date.))
 
-)
-
-(defn insert-value [conn ntk T value] 
+#_(defn insert-value [conn ntk T value] 
   (let [T (jd T)
         idx (idxid ntk T)
         prev (seq  (q `[:find ?id :where [?id :bitemp/index ~idx]] (db conn)))
         eid (if prev (ffirst prev) (d/tempid :db.part/user))]
     @(d/transact conn [{:db/id eid
+                        :bitemp/index idx
+                        :bitemp/ntk ntk
+                        :bitemp/T T
+                        :bitemp/value value}])))
+; implicit upsert seems to be just as slow
+(defn insert-value [conn ntk T value] 
+  (let [T (jd T)
+        idx (idxid ntk T)]
+    @(d/transact conn [{:db/id (d/tempid :bitemp) ;#db/id[:user.part/users]
                         :bitemp/index idx
                         :bitemp/ntk ntk
                         :bitemp/T T
@@ -99,21 +106,27 @@
              ]
          (println t (count  r) r))))
   ([conn ntk T]
-     (let [idx  (idxid ntk T)
+     (let [a    (:id (d/attribute (db conn) :bitemp/value))
+           _    (println a)
+           idx  (idxid ntk T)
            id   (ffirst (q `[:find ?id :where
                            [?id :bitemp/index ~idx]] (db conn)))
-           _ (println id)
-           txs  (q `[:find ?t ?a ?v ?tx ?added
-                     :where [~id ?a ?v ?tx ?added] [?tx :db/txInstant ?t]]
-                   (d/history (db conn)))]
+           txs  (sort-by first (q `[:find ?t ?tx ?v
+                       :where [~id ~a ?v ?tx true]
+                              [?tx :db/txInstant ?t]]
+                     (d/history (db conn))))]
        (doseq [tx txs] (println tx)))))
 
 
 
 (defn get-at-vt [conn ntk T]
-  (let [idx (idxid ntk T)
+  (let [T   (jd T)
+        idx (idxid ntk T)
         ds  (seq (d/seek-datoms (db conn) :avet :bitemp/index idx))]
-    (and ds (.v (first ds)))
+    (and ds (q `[:find ?T ?v :where
+                 [?e :bitemp/index ~(.v (first ds))]
+                 [?e :bitemp/value ?v]
+                 [?e :bitemp/T ?T]] (db conn)))
 ))
 
 (defn get-at-bt [conn ntk T t]
@@ -124,6 +137,23 @@
                  [?e :bitemp/index ~(.v (first ds))]
                  [?e :bitemp/value ?v]
                  [?e :bitemp/T ?T]] dbt))))
+
+(defn insert-lots [conn nKeys nTv nRev]
+  (doseq [r  (range nRev)
+          T  (range nTv)
+          k  (range nKeys)]
+    (let [k (str "Thing" k)
+          v (str "v" T "r" r)]
+      (println "Inserting" k T v)
+      (insert-value conn k T v))))
+
+(defn query-lots [conn nKeys nTv n]
+  (dotimes [_ n]
+    (let [T (rand-int nTv)
+          k (str "Thing" (rand-int nKeys))]
+      (println "Querying" k T (get-at-vt conn k T))
+      )))
+
 
 
 (comment 
