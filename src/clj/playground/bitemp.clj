@@ -86,17 +86,27 @@
                         :bitemp/ntk ntk
                         :bitemp/T T
                         :bitemp/value value}])))
-; implicit upsert seems to be just as slow
-(defn insert-value [conn ntk T value] 
-  "Insert a value and return time of insert"
+
+(defn insert-tx [ntk T value] 
   (let [T (jd T)
-        idx (idxid ntk T)]
-    (-> @(d/transact conn [{:db/id (d/tempid :bitemp) ;#db/id[:user.part/users]
+      idx (idxid ntk T)]
+    {:db/id (d/tempid :bitemp) ;#db/id[:user.part/users]
                           :bitemp/index idx
                           :bitemp/ntk ntk
                           :bitemp/T T
-                          :bitemp/value value}])
-        :tx-data first  .v)))
+                          :bitemp/value value}))
+
+; implicit upsert seems to be just as slow
+(defn insert-value [conn ntk T value] 
+  "Insert a value and return time of insert"
+  (-> @(d/transact conn [(insert-tx ntk T value)])
+      :tx-data first  .v))
+
+(defn insert-values [conn ntk-T-values] 
+  "Insert a value and return time of insert"
+  (-> @(d/transact conn (map (partial apply insert-tx) ntk-T-values))
+      :tx-data first  .v))
+
 
 (defn print-hist
   ([conn]
@@ -162,14 +172,20 @@
       (-> (d/entity db (d/t->tx (d/basis-t db))) :db/txInstant)))
 
 
-(defn insert-lots [conn nKeys nTv nRev]
+(defn insert-lots [conn nKeys nTv nRev nKeyBatch]
   (let [txs (for [r  (range nRev)
                   T  (range nTv)
-                  k  (range nKeys)]
-              (let [T (* 10 T)
-                    k (str "Thing" k)
-                    v (str "k" k "v" T "r" r)]
-                (insert-value conn k T v)))]
+                  k0 (range 0 nKeys nKeyBatch)
+                  :let [k1 (+ k0 nKeyBatch)]]
+              (do 
+                (println "inserting between" k0 k1)
+                (insert-values conn
+                               (for [k (range k0 k1)]
+                                 [(str "k" k "v" T "r" r)
+                                  (* 10 T)
+                                  (str "Thing" k)
+                                  ]
+                                 ))))]
     [(first txs) (last txs)]))
 
 (defn query-lots [conn nKeys nTv [t1 t2] n]
