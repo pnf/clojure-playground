@@ -178,7 +178,7 @@
                   k0 (range 0 nKeys nKeyBatch)
                   :let [k1 (+ k0 nKeyBatch)]]
               (do 
-                (println "inserting between" k0 k1)
+                ;(println "inserting between" k0 k1)
                 (insert-values conn
                                (for [k (range k0 k1)]
                                  [(str "k" k "v" T "r" r)
