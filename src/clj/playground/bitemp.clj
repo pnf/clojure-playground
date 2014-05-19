@@ -4,7 +4,8 @@
   (:require  digest
              [clj-time.core :as ct]
              [clj-time.coerce :as co]
-             [clj-time.format :as cf]))
+             ;[clj-time.format :as cf]
+             ))
 
 (def uri "datomic:free://localhost:4334/bitemp")
 
@@ -12,14 +13,14 @@
 
 (def schema-tx 
     [{:db/id #db/id[:db.part/db]
-      :db/ident :bitemp/ntk
+      :db/ident :bitemp/k
       :db/valueType :db.type/string
       :db/cardinality :db.cardinality/one
       :db/doc "Non-temporal key"
       :db.install/_attribute :db.part/db}
 
      {:db/id #db/id[:db.part/db]
-     :db/ident :bitemp/T
+     :db/ident :bitemp/tv
      :db/valueType :db.type/instant
      :db/cardinality :db.cardinality/one
      :db/doc "Time for which data is relevant"
@@ -41,8 +42,8 @@
       :db/doc "The value"
       :db.install/_attribute :db.part/db}
      ]
-
 )
+
 
 (defn recreate-db []
   (d/delete-database uri)
@@ -57,54 +58,63 @@
 
 (defn connect []
   (let [conn (d/connect uri)]
-    @(sync conn)
+    @(d/sync conn)
     conn))
 
-
+(defn long->str [l] 
+  (let [li (- 100000000000000 l)]
+    (apply str (map #(->> % (bit-shift-right li) (bit-and 0xFF) char) [24 16 8 0]))))
 (defn k-hash [k] (digest/md5 k))
-(defn t-format [t] (-> t .getTime (as-> % (- 100000000000000 %)) (as-> % (format "%016d" %))))
+(defn t-format [t] (-> t
+                       .getTime ;(as-> % (- 100000000000000 %)) (as-> % (format "%016d" %))
+                       long->str
+                       ))
+
+
+
 (def idx-sep "-")
-(defn idxid [k T] (str (k-hash k) idx-sep (t-format T)))
+(defn idxid [k tv] (str (k-hash k) idx-sep (t-format tv)))
 
 (defn  jd 
-  ([T]
-     (condp = (type T)
-       java.lang.Long (java.util.Date. T)
-       java.lang.Integer (java.util.Date. (long T))
-       java.util.Date T
-       java.lang.String (-> T co/from-string co/to-date)))
+  ([tv]
+     (condp = (type tv)
+       java.lang.Long (java.util.Date. tv)
+       java.lang.Integer (java.util.Date. (long tv))
+       java.util.Date tv
+       java.lang.String (-> tv co/from-string co/to-date)))
   ([] (java.util.Date.)))
 
 
-#_(defn insert-value [conn ntk T value] 
-  (let [T (jd T)
-        idx (idxid ntk T)
+; Explicit insert, rather than upsert
+#_(defn insert-value [conn k tv value] 
+  (let [tv (jd tv)
+        idx (idxid k tv)
         prev (seq  (q `[:find ?id :where [?id :bitemp/index ~idx]] (db conn)))
         eid (if prev (ffirst prev) (d/tempid :db.part/user))]
     @(d/transact conn [{:db/id eid
                         :bitemp/index idx
-                        :bitemp/ntk ntk
-                        :bitemp/T T
+                        :bitemp/k k
+                        :bitemp/tv tv
                         :bitemp/value value}])))
 
-(defn insert-tx [ntk T value] 
-  (let [T (jd T)
-      idx (idxid ntk T)]
+(defn insert-tx [k tv value] 
+  (let [tv (jd tv)
+      idx (idxid k tv)]
     {:db/id (d/tempid :bitemp) ;#db/id[:user.part/users]
                           :bitemp/index idx
-                          :bitemp/ntk ntk
-                          :bitemp/T T
+                          :bitemp/k k
+                          :bitemp/tv tv
                           :bitemp/value value}))
 
-; implicit upsert seems to be just as slow
-(defn insert-value [conn ntk T value] 
-  "Insert a value and return time of insert"
-  (-> @(d/transact conn [(insert-tx ntk T value)])
+; implicit upsert
+(defn insert-value [conn k tv value] 
+  "Insert a value at tv and return time of insert, and return the transaction time"
+  (-> @(d/transact conn [(insert-tx k tv value)])
       :tx-data first  .v))
 
-(defn insert-values [conn ntk-T-values] 
-  "Insert a value and return time of insert"
-  (-> @(d/transact conn (map (partial apply insert-tx) ntk-T-values))
+(defn insert-values [conn k-tv-values] 
+  "Insert multiple values at [[tv1 v1] [tv2 v2] ...] and return the transaction time"
+  (-> @(d/transact conn (map (partial apply insert-tx) k-tv-values))
       :tx-data first  .v))
 
 
@@ -112,13 +122,13 @@
   ([conn]
      (doseq [t  (sort (q '[:find ?when :where [_ :db/txInstant ?when]] (db conn)))]
        (let [tx (first t)
-             r  (q '[:find ?e ?ntk ?T ?i ?v :where [?e :bitemp/ntk ?ntk] [?e :bitemp/T ?T] [?e :bitemp/index ?i] [?e :bitemp/value ?v] ] (-> conn db (d/as-of tx)))
+             r  (q '[:find ?e ?k ?tv ?i ?v :where [?e :bitemp/k ?k] [?e :bitemp/tv ?tv] [?e :bitemp/index ?i] [?e :bitemp/value ?v] ] (-> conn db (d/as-of tx)))
              ]
          (println t (count  r) r))))
-  ([conn ntk T]
+  ([conn k tv]
      (let [a    (:id (d/attribute (db conn) :bitemp/value))
            _    (println a)
-           idx  (idxid ntk T)
+           idx  (idxid k tv)
            id   (ffirst (q `[:find ?id :where
                            [?id :bitemp/index ~idx]] (db conn)))
            txs  (sort-by first (q `[:find ?t ?tx ?v
@@ -133,71 +143,72 @@
          :in $ [[?ts]] ?k
          :where
          [?ts :bitemp/index ?i]
-         [?ts :bitemp/ntk ?k]
+         [?ts :bitemp/k ?k]
          [?ts :bitemp/value ?v]]
        db
-       (seq (d/index-range db :bitemp/T (jd 10) (jd 30))) "Thing4"))
+       (seq (d/index-range db :bitemp/tv (jd 10) (jd 30))) "Thing4"))
 
 #_(seq (d/index-range (db conn)
                       :bitemp/index
                       (idxid "Thing4" (jd 20))
                       (idxid "Thing4" (jd 10))))
 
-(defn get-at [conn k T & t]
-  (let [Tf  (t-format (jd T))
+(defn get-at [conn k tv & tt]
+  (let [tvf  (t-format (jd tv))
         kh  (k-hash k)
-        idx (str kh idx-sep Tf)
-        db  (if t (-> conn db (d/as-of (first  t))) (db conn))
+        idx (str kh idx-sep tvf)
+        db  (if tt (-> conn db (d/as-of (first  tt))) (db conn))
         es  (some-> (d/index-range db :bitemp/index idx nil)
-                    seq
-                    first
-                    .v
-                    )]
-     (and es
-         (.startsWith es kh)
-         (first (q '[:find ?T ?v
-                     :in $ ?i ?k
-                     :where
-                     [?e :bitemp/index ?i]
-                     [?e :bitemp/ntk   ?k]
-                     [?e :bitemp/value ?v]
-                     [?e :bitemp/T     ?T]
-                     ]
-                   db es k)))
-))
-
+                    seq first .v)]
+    (or  (and es
+              (.startsWith es kh)
+              (first (q '[:find ?tv ?v
+                          :in $ ?i ?k
+                          :where
+                          [?e :bitemp/index ?i]
+                          [?e :bitemp/k   ?k]
+                          [?e :bitemp/value ?v]
+                          [?e :bitemp/tv     ?tv]
+                          ]
+                        db es k)))
+         nil)))
 
 (defn dbtime [conn] 
   (let [db (db conn)]
       (-> (d/entity db (d/t->tx (d/basis-t db))) :db/txInstant)))
 
+(defn test-val [k i j] (str "k" k "v" i "r" j))
 
-(defn insert-lots [conn nKeys nTv nRev nKeyBatch]
-  (let [txs (for [r  (range nRev)
-                  T  (range nTv)
-                  k0 (range 0 nKeys nKeyBatch)
-                  :let [k1 (+ k0 nKeyBatch)]]
-              (do 
-                ;(println "inserting between" k0 k1)
-                (insert-values conn
-                               (for [k (range k0 k1)]
-                                 [(str "k" k "v" T "r" r)
-                                  (* 10 T)
-                                  (str "Thing" k)
-                                  ]
-                                 ))))]
-    [(first txs) (last txs)]))
+(defn insert-lots [conn nKeys nTv nTt]
+  "Insert lots of stuff.  nKeys unique keys, nTv tv's, nTt nt's in batches of nKeys.
+Returns a list of transaction times"
+  (let [tts (for [i   (range nTt)]
+              (last  (for [j   (range nTv)]
+                       (do  (insert-values conn
+                                           (for [k (range nKeys)]
+                                             (let [k  (str "Thing" k)
+                                                   tv (jd (* 10  j))
+                                                   v  (str k "v" j "t" i)]
+                                        ;(println "Inserting" k "(" tv ") = " v)
+                                               [k tv v])))))))]
+    tts ;[(first txs) (last txs)]
+    ))
 
-(defn query-lots [conn nKeys nTv [t1 t2] n]
-  (let [t1 (.getTime t1)
-        dt (- (.getTime t2) t1)]
+(defn query-lots [conn nKeys nTv tts n]
+  (let [tts (vec tts)
+        nTt  (count tts)]
     (dotimes [_ n]
-      (let [T (* 10  (rand-int nTv))
-            t (jd (+ t1 (rand-int dt)))
-            k (str "Thing" (rand-int nKeys))
-            v (get-at conn k T)]
-        ;(println "Querying" k T t v)
+      (let [i  (rand-int nTt)
+            tt (get tts i)
+            j  (rand-int nTv)
+            tv (jd  (* 10 j))
+            k  (str "Thing" (rand-int nKeys))
+            v  (second (get-at conn k tv tt))
+            ve (str k "v" j "t" i) ]
+        ;(println "Querying" k "(" tv "," tt ") = " v "=?=" ve)
+        (assert (= v ve))
         ))))
+
 
 
 (comment 
@@ -205,7 +216,7 @@
 
   #_(def tx-instants (sort (q '[:find ?when :where [_ :db/txInstant ?when]] (db conn))))
 
-  #_(q '[:find ?e ?ntk ?T ?i :where [?e :bitemp/ntk ?ntk] [?e :bitemp/T ?T] [?e :bitemp/index ?i]] (db conn))
+  #_(q '[:find ?e ?k ?tv ?i :where [?e :bitemp/k ?k] [?e :bitemp/tv ?tv] [?e :bitemp/index ?i]] (db conn))
 
                                         ; Number of entities over time
   
