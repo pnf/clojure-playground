@@ -61,17 +61,11 @@
     @(d/sync conn)
     conn))
 
+(defn k-hash [k] (digest/md5 k))
 (defn long->str [l] 
   (let [li (- 100000000000000 l)]
-    (apply str (map #(->> % (unsigned-bit-shift-right li) (bit-and 0xFF) char) [24 16 8 0]))))
-(defn k-hash [k] (digest/md5 k))
-(defn t-format [t] (-> t
-                       .getTime ;(as-> % (- 100000000000000 %)) (as-> % (format "%016d" %))
-                       long->str
-                       ))
-
-
-
+    (apply str (map #(->> % (unsigned-bit-shift-right li) (bit-and 0xFF) char) [56 48 40 32 24 16 8 0]))))
+(defn t-format [t] (-> t .getTime long->str))
 (def idx-sep "-")
 (defn idxid [k tv] (str (k-hash k) idx-sep (t-format tv)))
 
