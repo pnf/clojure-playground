@@ -16,7 +16,7 @@
       :db/ident :bitemp/k
       :db/valueType :db.type/string
       :db/cardinality :db.cardinality/one
-      :db/doc "Non-temporal key"
+      :db/doc "Non-temporal part of the key"
       :db.install/_attribute :db.part/db}
 
      {:db/id #db/id[:db.part/db]
@@ -31,7 +31,7 @@
       :db/ident :bitemp/index
       :db/valueType :db.type/string
       :db/cardinality :db.cardinality/one
-      :db/doc "concatenated ndtid and instantmsec"
+      :db/doc "concatenated k and tv"
       :db/unique :db.unique/identity
       :db.install/_attribute :db.part/db}
 
@@ -85,17 +85,6 @@
   ([] (java.util.Date.)))
 
 
-; Explicit insert, rather than upsert
-#_(defn insert-value [conn k tv value] 
-  (let [tv (jd tv)
-        idx (idxid k tv)
-        prev (seq  (q `[:find ?id :where [?id :bitemp/index ~idx]] (db conn)))
-        eid (if prev (ffirst prev) (d/tempid :db.part/user))]
-    @(d/transact conn [{:db/id eid
-                        :bitemp/index idx
-                        :bitemp/k k
-                        :bitemp/tv tv
-                        :bitemp/value value}])))
 
 (defn insert-tx [k tv value] 
   (let [tv (jd tv)
@@ -137,21 +126,6 @@
                      (d/history (db conn))))]
        (doseq [tx txs] (println tx)))))
 
-
-#_(let [db (db conn)]
-    (q '[:find ?v ?i
-         :in $ [[?ts]] ?k
-         :where
-         [?ts :bitemp/index ?i]
-         [?ts :bitemp/k ?k]
-         [?ts :bitemp/value ?v]]
-       db
-       (seq (d/index-range db :bitemp/tv (jd 10) (jd 30))) "Thing4"))
-
-#_(seq (d/index-range (db conn)
-                      :bitemp/index
-                      (idxid "Thing4" (jd 20))
-                      (idxid "Thing4" (jd 10))))
 
 (defn get-at [conn k tv & tt]
   (let [tvf  (t-format (jd tv))
@@ -211,13 +185,3 @@ Returns a list of transaction times"
 
 
 
-(comment 
-
-
-  #_(def tx-instants (sort (q '[:find ?when :where [_ :db/txInstant ?when]] (db conn))))
-
-  #_(q '[:find ?e ?k ?tv ?i :where [?e :bitemp/k ?k] [?e :bitemp/tv ?tv] [?e :bitemp/index ?i]] (db conn))
-
-                                        ; Number of entities over time
-  
-  )
