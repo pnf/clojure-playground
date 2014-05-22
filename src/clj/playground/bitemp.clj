@@ -64,7 +64,7 @@
 (defn k-hash [k] (digest/md5 k))
 (defn long->str [l] 
   (let [li (- 100000000000000 l)]
-    (apply str (map #(->> % (unsigned-bit-shift-right li) (bit-and 0xFF) char) [56 48 40 32 24 16 8 0]))))
+    (apply str (map #(->> % (bit-shift-right li) (bit-and 0xFF) char) [56 48 40 32 24 16 8 0]))))
 (defn t-format [t] (-> t .getTime long->str))
 (def idx-sep "-")
 (defn idxid [k tv] (str (k-hash k) idx-sep (t-format tv)))
@@ -96,7 +96,7 @@
       :tx-data first  .v))
 
 (defn insert-values [conn k-tv-values] 
-  "Insert multiple values at [[tv1 v1] [tv2 v2] ...] and return the transaction time"
+  "Insert multiple values at [[k1 tv1 v1] [k2 tv2 v2] ...] and return the transaction time"
   (-> @(d/transact conn (map (partial apply insert-tx) k-tv-values))
       :tx-data first  .v))
 
