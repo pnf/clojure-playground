@@ -34,7 +34,9 @@
 
 
   :plugins [[lein-cljsbuild "0.3.2"]
-            [lein-ring "0.8.5"]]
+            [lein-ring "0.8.5"]
+            ;[lein-nodisassemble "0.1.3"]
+            ]
 
   :ring {:handler playground.ring/handle}
 
